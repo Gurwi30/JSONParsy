@@ -1,16 +1,13 @@
 
 from typing import Any
-from tokenizer import Token, TokenType
+from src.utils.error_utils import LexerError
+from src.lexer.tokenizer import Token, TokenType
 
 
-class ParsingError(Exception):
+class ParsingError(LexerError):
     
     def __init__(self, message: str, position: tuple[int, int], expected: list[TokenType], got: str):
-        super().__init__(message)
-
-        self.position = position
-        self.expected = expected
-        self.got = got
+        super().__init__(message, position, [token.value for token in expected], got)
 
 
 def parse_object(tokens: list[Token], start_idx: int = 0) -> tuple[int, Any]:
@@ -67,11 +64,11 @@ def parse_object(tokens: list[Token], start_idx: int = 0) -> tuple[int, Any]:
         if token.type == TokenType.VALUE_SEPARATOR:
             i += 1
             if tokens[i].type == TokenType.END_OBJECT:
-                raise ValueError("Unexpected ',' at the end of object")
+                raise create_expected_error([TokenType.END_OBJECT], token)
         elif token.type != TokenType.END_OBJECT:
             raise create_expected_error([TokenType.END_OBJECT, TokenType.VALUE_SEPARATOR], token)
 
-    raise ValueError("Invalid object! Missing closing '}'")
+    raise create_expected_error([TokenType.END_OBJECT], token)
 
 def parse_array(tokens: list[Token], start_idx: int = 0) -> tuple[int, list[Any]]:
     if tokens[start_idx].type != TokenType.BEGIN_ARRAY:
@@ -111,7 +108,7 @@ def parse_array(tokens: list[Token], start_idx: int = 0) -> tuple[int, list[Any]
 
         i += 1
 
-    raise ValueError("Invalid array! Missing closing ']'")
+    raise create_expected_error([TokenType.END_ARRAY], token)
 
 def parse_simple_value(token: Token) -> Any:
     match token.type:
@@ -137,7 +134,7 @@ def parse_simple_value(token: Token) -> Any:
                 "Unable to parse simple value"
             )
 
-def create_expected_error(expected: list[TokenType], token: Token, msg: str = "") -> ValueError:
+def create_expected_error(expected: list[TokenType], token: Token, msg: str = "") -> ParsingError:
     return ParsingError(
         f"{msg + ' ' or ''}Expecting '{', '.join(t.value for t in expected)}', got '{token.type.value}'",
         token.position,

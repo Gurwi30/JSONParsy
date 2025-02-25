@@ -1,5 +1,7 @@
 from enum import Enum
 
+from src.utils.error_utils import LexerError
+
 
 class TokenType(Enum):
     BEGIN_ARRAY = "["
@@ -22,14 +24,10 @@ class Token:
         self.value = value
         self.position = position
 
-class TokenizationError(Exception):
+class TokenizationError(LexerError):
     
     def __init__(self, message: str, position: tuple[int, int], expected: list[TokenType], got: str):
-        super().__init__(message)
-
-        self.position = position
-        self.expected = expected
-        self.got = got
+        super().__init__(message, position, [token.value for token in expected], got)
 
 def tokenize(json: str) -> list[Token]:
     tokens: list[Token] = list()
@@ -61,6 +59,9 @@ def tokenize(json: str) -> list[Token]:
                 ':': TokenType.NAME_SEPARATOR, ',': TokenType.VALUE_SEPARATOR
             }[char], None, (line, column)))
 
+            i += 1
+            continue
+
         match char:
             case 'n' if json[i:i+4] == 'null':
                 tokens.append(Token(TokenType.NULL, 'null', (line, column)))
@@ -81,7 +82,7 @@ def tokenize(json: str) -> list[Token]:
                 end_idx: int = json.find('"', i+1)
 
                 if end_idx == -1:
-                    raise TokenizationError(json, (line, column), [TokenType.STRING], char)
+                    raise TokenizationError("Missing closing '\"'", (line, column), [TokenType.STRING], char)
 
                 value: str = json[i+1:end_idx]
                 tokens.append(Token(TokenType.STRING, value, (line, column)))
@@ -92,7 +93,7 @@ def tokenize(json: str) -> list[Token]:
                 end_idx: int = i
 
                 if char == "-" and json[i + 1] == '.':
-                    raise ValueError(f'Unexpected character: {json[i+1]}')
+                    raise TokenizationError(f"Unexpected character in number '{json[i + 1]}'", (line, column), [TokenType.EOF], char)
 
                 while end_idx < length and json[end_idx] in number_chars:
                     end_idx += 1
@@ -100,15 +101,14 @@ def tokenize(json: str) -> list[Token]:
                 value: str = json[i:end_idx]
                 
                 if not value[-1].isdigit():
-                    raise ValueError(f'Unexpected character at line {line}: {value[-1]}')
+                    raise TokenizationError(f"Unexpected character in number '{value[-1]}'", (line, column), [TokenType.EOF], char)
                 
                 tokens.append(Token(TokenType.NUMBER, value, (line, column)))
                 column += end_idx - i - 1
                 i = end_idx - 1
 
             case _:
-                if char not in "{[:]},":
-                    raise TokenizationError(json, (line, column), [t for t in TokenType], char)
+                raise TokenizationError(f"Unexpected character in number '{char}'", (line, column), [t for t in TokenType], char)
         i += 1
 
     return tokens
