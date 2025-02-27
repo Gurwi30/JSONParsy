@@ -1,7 +1,8 @@
 from typing import Any
 from src.utils.error_utils import LexerError
-from src.lexer.tokenizer import Token, TokenType, TokenizationError, tokenize
-from src.lexer.parser import ParsingError, parse_object, parse_array, parse_simple_value
+from src.lexer.tokenizer import Token, TokenType, tokenize
+from src.lexer.parser import parse_object, parse_array, parse_simple_value
+from src.serializer.serializer import JSONEntity, serialize_object, serialize_array, is_iterable
 
 class JSONSyntaxError(Exception):
 
@@ -26,8 +27,23 @@ def parse(json: str) -> Any:
     except LexerError as e:
         raise JSONSyntaxError(format_error(json, e.position, e.expected, e.got))
 
-def serialize(obj: dict) -> str:
-    pass
+def serialize(value: object) -> str:
+    if value is None:
+        return "null"
+    elif isinstance(value, dict):
+        return serialize_object(value)
+    elif is_iterable(value):
+        return serialize_array(value)
+    elif isinstance(value, str):
+        return f'"{value}"'
+    elif isinstance(value, bool):
+        return str(value).lower()
+    elif isinstance(value, (int, float)):
+        return str(value)
+    elif isinstance(value, JSONEntity):
+        return value.serialize()
+    else:
+        raise ValueError(f"Unsupported data type: {type(value)}")
 
 def save(obj: dict, path: str) -> None:
     pass
